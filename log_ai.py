@@ -3,24 +3,25 @@ import datetime
 import os
 import requests
 
-# TIL 폴더 안에 날짜별로 저장되도록 설정
-BASE_DIR = "daily_logs"
+# 🌟 [핵심 변경점] 현재 실행 중인 파일(log_ai.py)의 절대 경로를 추적
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 항상 log_ai.py가 있는 폴더 아래에 'daily_logs' 폴더를 지정
+BASE_DIR = os.path.join(CURRENT_DIR, "daily_logs")
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
 def get_today_file_path():
     """오늘 날짜의 파일 경로를 반환하고, 폴더가 없으면 생성합니다."""
-    
     if not os.path.exists(BASE_DIR):
         os.makedirs(BASE_DIR)
     
     today_date = datetime.datetime.now().strftime("%Y-%m-%d")
     return os.path.join(BASE_DIR, f"{today_date}.md")
+
 def get_ai_analysis(raw_message):
-    # 🌟 [핵심 변경 포인트] 입력 메시지에 따라 프롬프트를 다르게 설정
-    is_done_mode = "[DONE]" in raw_message.upper() # 대소문자 구분 없이 확인
+    is_done_mode = "[DONE]" in raw_message.upper()
 
     if is_done_mode:
-        # 🟢 [모드 1] 진행 상황 및 성과 기록용 프롬프트
         clean_message = raw_message.replace("[DONE]", "").replace("[done]", "").strip()
         prompt = f"""
         당신은 수석 개발자의 멘토 역할을 하는 AI입니다.
@@ -37,10 +38,9 @@ def get_ai_analysis(raw_message):
         [사용자 로그]
         "{clean_message}"
         """
-        print("🤖 진행 상황 및 성과를 요약 중입니다... (gemma2:2b)")
+        print("🤖 진행 상황 및 성과를 요약 중입니다... (qwen2.5-coder:7b)")
 
     else:
-        # 🔴 [모드 2] 기존의 트러블슈팅용 프롬프트
         prompt = f"""
         당신은 테크 리드(Tech Lead)급 개발자입니다. 
         사용자가 작성한 짧은 트러블슈팅 로그를 바탕으로, Notion이나 기술 블로그에 즉시 복사-붙여넣기 할 수 있는 '구조화된 기술 문서 초안'을 작성하세요.
@@ -60,11 +60,11 @@ def get_ai_analysis(raw_message):
         [사용자 로그]
         "{raw_message}"
         """
-        print("🤖 트러블슈팅 문서를 작성 중입니다... (gemma2:2b)")
+        print("🤖 트러블슈팅 문서를 작성 중입니다... (qwen2.5-coder:7b)")
     
     try:
         response = requests.post(OLLAMA_URL, json={
-            "model": "gemma2:2b", # 현재 사용하는 모델명 확인
+            "model": "qwen2.5-coder:7b", 
             "prompt": prompt,
             "stream": False
         }, timeout=120)
@@ -79,17 +79,15 @@ def save_log(message):
     now_time = datetime.datetime.now().strftime("%H:%M:%S")
     file_path = get_today_file_path()
     
-    print("🤖 노션에 붙여넣을 기술 문서를 작성 중입니다... (gemma2:2b)")
+    print("🤖 노션에 붙여넣을 기술 문서를 작성 중입니다... (qwen2.5-coder:7b)")
     
     ai_analysis = get_ai_analysis(message)
     
-    # 파일이 처음 생성되는 경우 헤더 추가
     if not os.path.exists(file_path):
         with open(file_path, "w", encoding="utf-8") as f:
             date_title = datetime.datetime.now().strftime("%Y년 %m월 %d일")
             f.write(f"# 📅 {date_title} - TIL (Today I Learned)\n\n")
 
-    # 내용 이어쓰기
     with open(file_path, "a", encoding="utf-8") as f:
         f.write(f"## ⏱️ {now_time}\n")
         f.write(f"**[내 기록]**: {message}\n\n")
@@ -105,4 +103,3 @@ if __name__ == "__main__":
     else:
         user_message = " ".join(sys.argv[1:])
         save_log(user_message)
-
